@@ -80,14 +80,23 @@ struct blob_buf b = { };
 struct blob_buf del = { };
 struct uci_context *uci;
 
+/* WDS backhaul options table */
+#define SCHEMA_WDS_OPT_SZ            32
+#define SCHEMA_WDS_OPTS_MAX          1
+
+const char wds_options_table[SCHEMA_WDS_OPTS_MAX][SCHEMA_WDS_OPT_SZ] =
+{
+        SCHEMA_CONSTS_STP,
+};
+
 /* Mesh options table */
 #define SCHEMA_MESH_OPT_SZ            32
 #define SCHEMA_MESH_OPTS_MAX          2
 
 const char mesh_options_table[SCHEMA_MESH_OPTS_MAX][SCHEMA_MESH_OPT_SZ] =
 {
-		SCHEMA_CONSTS_MESH_MCAST_FANOUT,
-		SCHEMA_CONSTS_MESH_HOP_PENALTY,
+	SCHEMA_CONSTS_MESH_MCAST_FANOUT,
+	SCHEMA_CONSTS_MESH_HOP_PENALTY,
 };
 
 static void wifi_inet_conf_load(struct uci_section *s)
@@ -195,6 +204,26 @@ static void wifi_inet_conf_load(struct uci_section *s)
 	if (!ovsdb_table_upsert(&table_Wifi_Inet_Config, &conf, false))
 		LOG(ERR, "inet_config: failed to insert");
 }
+
+static void wds_opt_set(struct blob_buf *b, const struct schema_Wifi_Inet_Config *iconf)
+{
+        int i;
+        const char *opt;
+        const char *val;
+
+        for (i = 0; i < SCHEMA_WDS_OPTS_MAX; i++) {
+                opt = wds_options_table[i];
+                val = SCHEMA_KEY_VAL_NULL(iconf->mesh_options, opt);
+
+                if (strcmp(opt, "stp") == 0) {
+                        if (!val)
+                                blobmsg_add_u32(b, "stp", 0);
+                        else
+                                blobmsg_add_u32(b, "stp", atoi(val)?1:0);
+                }
+        }
+}
+
 
 static void mesh_opt_set(struct blob_buf *b,
                                       const struct schema_Wifi_Inet_Config *iconf)
@@ -322,6 +351,7 @@ static int wifi_inet_conf_add(struct schema_Wifi_Inet_Config *iconf)
 		blobmsg_add_u32(&b, "orig_interval", 5000);
 		blobmsg_add_string(&b, "gw_mode", "off");
 	}
+	wds_opt_set(&b, iconf);
 
 	if (iconf->mtu_exists)
 		blobmsg_add_u32(&b, "mtu", iconf->mtu);
